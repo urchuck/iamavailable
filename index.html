@@ -17,7 +17,11 @@
     }
     .container {
       display: flex;
+      justify-content: space-between;
       width: 100%;
+      padding: 1rem;
+      gap: 1rem;
+      align-items: flex-start;
     }
     .panel {
       flex: 1;
@@ -26,6 +30,9 @@
       align-items: center;
       justify-content: flex-start;
       padding: 1rem;
+      background-color: #1f1f1f;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     .diagram {
       width: 300px;
@@ -43,21 +50,26 @@
     .controls {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 1rem;
       margin-bottom: 1rem;
+      width: 100%;
     }
     .period-list {
       max-height: 300px;
       overflow-y: auto;
+      width: 100%;
+      margin-top: 1rem;
     }
     .period-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 0.25rem 0.5rem;
-      background-color: #1f1f1f;
+      background-color: #333;
       margin: 0.25rem 0;
       border-left: 4px solid;
+      border-color: #fff;
+      border-radius: 4px;
     }
     .button {
       background-color: #333;
@@ -65,6 +77,8 @@
       padding: 0.5rem;
       border: none;
       cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.3s;
     }
     .button:hover {
       background-color: #555;
@@ -76,23 +90,44 @@
       justify-content: flex-start;
     }
     .column-spacing {
-      margin: 2rem;
+      margin: 0 1rem;
+      flex: 1;
+    }
+    label {
+      color: #ddd;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+    input[type="time"] {
+      background-color: #222;
+      border: 1px solid #444;
+      color: #f0f0f0;
+      padding: 0.25rem;
+      border-radius: 4px;
+      width: 120px;
+    }
+    input[type="checkbox"] {
+      margin-right: 0.5rem;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="column">
+    <!-- Left Panel with Controls -->
+    <div class="panel">
       <div class="controls">
         <label>Start: <input type="time" id="startTime" step="300"></label>
         <label>End: <input type="time" id="endTime" step="300"></label>
         <button class="button" onclick="addTimeBlock()">Add</button>
         <button class="button" onclick="clearTimeBlocks()">Clear All</button>
         <button class="button" onclick="encodePeriodsToURL()">Copy Link</button>
-        <label><input type="checkbox" id="toggleFormat" onchange="toggleTimeFormat()"> 24h Format</label>
+        <label>
+          <input type="checkbox" id="toggleFormat" onchange="toggleTimeFormat()"> 24h Format
+        </label>
       </div>
     </div>
-    
+
+    <!-- Center Panel with My Time Diagram -->
     <div class="column-spacing">
       <div class="panel" id="myTimePanel">
         <h2>My Time</h2>
@@ -102,7 +137,8 @@
         <div class="period-list" id="timeList"></div>
       </div>
     </div>
-    
+
+    <!-- Right Panel with Client's Time Diagram -->
     <div class="column-spacing">
       <div class="panel">
         <h2>Your Time</h2>
