@@ -142,10 +142,11 @@
     <div class="column-spacing">
       <div class="panel">
         <h2>Your Time</h2>
-        <p>This view shows how selected time blocks look in your time zone. The conversion is automatic based on your browser settings.</p>
         <div class="diagram">
           <canvas id="clientCanvas" width="300" height="300"></canvas>
         </div>
+        <!-- Moved the text below the diagram -->
+        <p>This view shows how selected time blocks look in your time zone. The conversion is automatic based on your browser settings.</p>
       </div>
     </div>
   </div>
@@ -300,52 +301,49 @@
       });
     }
 
+    function formatTime(minutes) {
+      if (use24h) {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return `${pad(hours)}:${pad(mins)}`;
+      }
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      const suffix = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 || 12;
+      return `${pad(displayHours)}:${pad(mins)} ${suffix}`;
+    }
+
+    function pad(n) {
+      return n < 10 ? `0${n}` : n;
+    }
+
     function render() {
+      drawClock(document.getElementById('myCanvas'), periods);
+      drawClock(document.getElementById('clientCanvas'), periods, true);
+      updatePeriodList();
+    }
+
+    function updatePeriodList() {
       const list = document.getElementById('timeList');
       list.innerHTML = '';
-      const now = new Date();
-      const offset = now.getTimezoneOffset();
-
-      const converted = periods.map(p => {
-        let start = p.start - offset;
-        let end = p.end - offset;
-        start = ((start % 1440) + 1440) % 1440;
-        end = ((end % 1440) + 1440) % 1440;
-        return { start, end };
-      });
-
       periods.forEach((p, i) => {
-        const start = formatTime(p.start);
-        const end = formatTime(p.end);
         const div = document.createElement('div');
         div.className = 'period-item';
-        div.style.borderColor = p.color;
-        div.innerHTML = `${start} - ${end} <button class="button" onclick="deletePeriod(${i})">x</button>`;
+        div.innerHTML = `${formatTime(p.start)} - ${formatTime(p.end)}`;
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'button';
+        deleteButton.innerText = 'Delete';
+        deleteButton.onclick = () => deletePeriod(i);
+        div.appendChild(deleteButton);
         list.appendChild(div);
       });
-
-      drawClock(document.getElementById('myCanvas'), periods, true);
-      drawClock(document.getElementById('clientCanvas'), converted, true);
-
-      const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      document.getElementById('clientTimeZone').textContent = clientTz;
     }
 
-    function formatTime(mins) {
-      let h = Math.floor(mins / 60) % 24;
-      let m = mins % 60;
-      if (use24h) {
-        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      } else {
-        const suffix = h >= 12 ? 'PM' : 'AM';
-        h = h % 12;
-        if (h === 0) h = 12;
-        return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
-      }
-    }
-
-    loadPeriodsFromURL();
-    render();
+    window.onload = () => {
+      loadPeriodsFromURL();
+      render();
+    };
   </script>
 </body>
 </html>
