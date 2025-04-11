@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Time Zone Availability Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .container {
+      display: flex;
+      width: 100%;
+    }
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 1rem;
+    }
+    .diagram {
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      background-color: #222;
+      margin: 1rem 0;
+      position: relative;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .period-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .period-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.25rem 0.5rem;
+      background-color: #1f1f1f;
+      margin: 0.25rem 0;
+      border-left: 4px solid;
+    }
+    .button {
+      background-color: #333;
+      color: white;
+      padding: 0.5rem;
+      border: none;
+      cursor: pointer;
+    }
+    .button:hover {
+      background-color: #555;
+    }
+    .column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    .column-spacing {
+      margin: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="column">
+      <div class="controls">
+        <label>Start: <input type="time" id="startTime" step="300"></label>
+        <label>End: <input type="time" id="endTime" step="300"></label>
+        <button class="button" onclick="addTimeBlock()">Add</button>
+        <button class="button" onclick="clearTimeBlocks()">Clear All</button>
+        <button class="button" onclick="encodePeriodsToURL()">Copy Link</button>
+        <label><input type="checkbox" id="toggleFormat" onchange="toggleTimeFormat()"> 24h Format</label>
+      </div>
+    </div>
+    
+    <div class="column-spacing">
+      <div class="panel" id="myTimePanel">
+        <h2>My Time</h2>
+        <div class="diagram">
+          <canvas id="myCanvas" width="300" height="300"></canvas>
+        </div>
+        <div class="period-list" id="timeList"></div>
+      </div>
+    </div>
+    
+    <div class="column-spacing">
+      <div class="panel">
+        <h2>Your Time</h2>
+        <p>This view shows how selected time blocks look in your time zone. The conversion is automatic based on your browser settings.</p>
+        <div class="diagram">
+          <canvas id="clientCanvas" width="300" height="300"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const colors = [
+      '#ff6b6b', '#feca57', '#48dbfb', '#1dd1a1', '#ff9ff3',
+      '#5f27cd', '#54a0ff', '#00d2d3', '#ff9f43', '#8395a7'
+    ];
+
+    let use24h = false;
+    const periods = [];
+
+    function encodePeriodsToURL() {
+      const encoded = periods.map(p => `${p.start}-${p.end}`).join(',');
+      const base = location.origin + location.pathname;
+      const url = `${base}?periods=${encodeURIComponent(encoded)}&format=${use24h ? '24' : '12'}`;
+      navigator.clipboard.writeText(url).then(() => {
+        alert("Link copied to clipboard!");
+      });
+    }
+
+    function loadPeriodsFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      const encoded = params.get("periods");
+      const format = params.get("format");
+      if (format === "24") {
+        document.getElementById("toggleFormat").checked = true;
+        use24h = true;
+      }
+      if (encoded) {
+        periods.length = 0;
+        encoded.split(',').forEach(pair => {
+          const [start, end] = pair.split('-').map(Number);
+          if (!isNaN(start) && !isNaN(end)) {
+            periods.push({
+              start,
+              end,
+              color: colors[periods.length % colors.length]
+            });
+          }
+        });
+      }
+    }
+
+    function addTimeBlock() {
+      if (periods.length >= 10) return alert("Max 10 periods allowed.");
+      const start = document.getElementById('startTime').value;
+      const end = document.getElementById('endTime').value;
+      if (!start || !end) return;
+
+      const [sh, sm] = start.split(":" ).map(Number);
+      const [eh, em] = end.split(":" ).map(Number);
+      let startMin = sh * 60 + sm;
+      let endMin = eh * 60 + em;
+      startMin = Math.round(startMin / 5) * 5;
+      endMin = Math.round(endMin / 5) * 5;
+      if (startMin === endMin) return;
+
+      periods.push({
+        start: startMin,
+        end: endMin,
+        color: colors[periods.length % colors.length]
+      });
+
+      render();
+    }
+
+    function clearTimeBlocks() {
+      periods.length = 0;
+      render();
+    }
+
+    function deletePeriod(index) {
+      periods.splice(index, 1);
+      render();
+    }
+
+    function toggleTimeFormat() {
+      use24h = document.getElementById('toggleFormat').checked;
+      render();
+    }
+
+    function mergePeriods(periodList) {
+      if (periodList.length === 0) return [];
+      const sorted = [...periodList].sort((a, b) => a.start - b.start);
+      const merged = [Object.assign({}, sorted[0])];
+      for (let i = 1; i < sorted.length; i++) {
+        const last = merged[merged.length - 1];
+        if (sorted[i].start <= last.end) {
+          last.end = Math.max(last.end, sorted[i].end);
+        } else {
+          merged.push(Object.assign({}, sorted[i]));
+        }
+      }
+      return merged;
+    }
+
+    function drawClock(canvas, periodList, labelTimes = false) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const radius = 120;
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      for (let i = 0; i < 24; i++) {
+        const angle = (i / 24) * 2 * Math.PI - Math.PI / 2;
+        const x1 = cx + Math.cos(angle) * (radius - 5);
+        const y1 = cy + Math.sin(angle) * (radius - 5);
+        const x2 = cx + Math.cos(angle) * (radius);
+        const y2 = cy + Math.sin(angle) * (radius);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      const merged = mergePeriods(periodList);
+
+      merged.forEach((p, index) => {
+        const startAngle = (p.start / 1440) * 2 * Math.PI - Math.PI / 2;
+        const endAngle = (p.end / 1440) * 2 * Math.PI - Math.PI / 2;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, startAngle, endAngle);
+        ctx.strokeStyle = colors[index % colors.length];
+        ctx.lineWidth = 20;
+        ctx.stroke();
+
+        if (labelTimes) {
+          ctx.fillStyle = colors[index % colors.length];
+          ctx.font = '12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          const startX = cx + Math.cos(startAngle) * (radius - 30);
+          const startY = cy + Math.sin(startAngle) * (radius - 30);
+          ctx.fillText(formatTime(p.start), startX, startY);
+
+          const endX = cx + Math.cos(endAngle) * (radius - 30);
+          const endY = cy + Math.sin(endAngle) * (radius - 30);
+          ctx.fillText(formatTime(p.end), endX, endY);
+        }
+      });
+    }
+
+    function render() {
+      const list = document.getElementById('timeList');
+      list.innerHTML = '';
+      const now = new Date();
+      const offset = now.getTimezoneOffset();
+
+      const converted = periods.map(p => {
+        let start = p.start - offset;
+        let end = p.end - offset;
+        start = ((start % 1440) + 1440) % 1440;
+        end = ((end % 1440) + 1440) % 1440;
+        return { start, end };
+      });
+
+      periods.forEach((p, i) => {
+        const start = formatTime(p.start);
+        const end = formatTime(p.end);
+        const div = document.createElement('div');
+        div.className = 'period-item';
+        div.style.borderColor = p.color;
+        div.innerHTML = `${start} - ${end} <button class="button" onclick="deletePeriod(${i})">x</button>`;
+        list.appendChild(div);
+      });
+
+      drawClock(document.getElementById('myCanvas'), periods, true);
+      drawClock(document.getElementById('clientCanvas'), converted, true);
+
+      const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      document.getElementById('clientTimeZone').textContent = clientTz;
+    }
+
+    function formatTime(mins) {
+      let h = Math.floor(mins / 60) % 24;
+      let m = mins % 60;
+      if (use24h) {
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      } else {
+        const suffix = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        if (h === 0) h = 12;
+        return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
+      }
+    }
+
+    loadPeriodsFromURL();
+    render();
+  </script>
+</body>
+</html>
