@@ -188,7 +188,17 @@
             });
           }
         });
+        // Convert times to local time zone when loading the link
+        convertToLocalTime();
       }
+    }
+
+    function convertToLocalTime() {
+      const offset = new Date().getTimezoneOffset(); // Get time zone offset in minutes
+      periods.forEach(p => {
+        p.start = p.start - offset;
+        p.end = p.end - offset;
+      });
     }
 
     function addTimeBlock() {
@@ -197,8 +207,8 @@
       const end = document.getElementById('endTime').value;
       if (!start || !end) return;
 
-      const [sh, sm] = start.split(":" ).map(Number);
-      const [eh, em] = end.split(":" ).map(Number);
+      const [sh, sm] = start.split(":").map(Number);
+      const [eh, em] = end.split(":").map(Number);
       let startMin = sh * 60 + sm;
       let endMin = eh * 60 + em;
       startMin = Math.round(startMin / 5) * 5;
@@ -324,7 +334,7 @@
         div.classList.add('period-item');
         div.innerHTML = `
           <span>${formatTime(p.start)} - ${formatTime(p.end)}</span>
-          <button onclick="deletePeriod(${index})">X</button>
+          <button onclick="deletePeriod(${index})">x</button>
         `;
         timeListContainer.appendChild(div);
       });
