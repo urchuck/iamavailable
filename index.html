@@ -145,7 +145,6 @@
         <div class="diagram">
           <canvas id="clientCanvas" width="300" height="300"></canvas>
         </div>
-        <!-- Moved the text below the diagram -->
         <p>This view shows how selected time blocks look in your time zone. The conversion is automatic based on your browser settings.</p>
       </div>
     </div>
@@ -302,42 +301,20 @@
     }
 
     function formatTime(minutes) {
-      if (use24h) {
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        return `${pad(hours)}:${pad(mins)}`;
-      }
       const hours = Math.floor(minutes / 60);
       const mins = minutes % 60;
-      const suffix = hours >= 12 ? 'PM' : 'AM';
-      const displayHours = hours % 12 || 12;
-      return `${pad(displayHours)}:${pad(mins)} ${suffix}`;
-    }
-
-    function pad(n) {
-      return n < 10 ? `0${n}` : n;
+      if (use24h) {
+        return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+      } else {
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const hour = hours % 12 || 12;
+        return `${hour}:${String(mins).padStart(2, '0')} ${period}`;
+      }
     }
 
     function render() {
-      drawClock(document.getElementById('myCanvas'), periods);
-      drawClock(document.getElementById('clientCanvas'), periods, true);
-      updatePeriodList();
-    }
-
-    function updatePeriodList() {
-      const list = document.getElementById('timeList');
-      list.innerHTML = '';
-      periods.forEach((p, i) => {
-        const div = document.createElement('div');
-        div.className = 'period-item';
-        div.innerHTML = `${formatTime(p.start)} - ${formatTime(p.end)}`;
-        const deleteButton = document.createElement('button');
-        deleteButton.className = 'button';
-        deleteButton.innerText = 'Delete';
-        deleteButton.onclick = () => deletePeriod(i);
-        div.appendChild(deleteButton);
-        list.appendChild(div);
-      });
+      drawClock(document.getElementById('myCanvas'), periods, true); // Show labels on My Time diagram
+      drawClock(document.getElementById('clientCanvas'), periods, true); // Show labels on Client's Time diagram
     }
 
     window.onload = () => {
