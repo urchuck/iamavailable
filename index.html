@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none';">
   <title>Time Zone Availability Viewer</title>
   <style>
     body {
@@ -133,26 +134,26 @@
       </div>
     </div>
 
-    <!-- Center Panel with My Time Diagram -->
+    <!-- Center Panel with Creator's Time Diagram -->
     <div class="column-spacing">
       <div class="panel" id="myTimePanel">
         <h2>My Time</h2>
         <div class="diagram">
-          <canvas id="myCanvas" width="300" height="300"></canvas>
+          <canvas id="creatorCanvas" width="300" height="300"></canvas>
         </div>
         <div class="period-list" id="timeList"></div>
       </div>
     </div>
 
-    <!-- Right Panel with Client's Time Diagram -->
+    <!-- Right Panel with Viewer's Time Diagram -->
     <div class="column-spacing">
       <div class="panel">
         <h2>Your Time</h2>
         <div class="diagram">
-          <canvas id="clientCanvas" width="300" height="300"></canvas>
+          <canvas id="viewerCanvas" width="300" height="300"></canvas>
         </div>
         <div class="timezone-info" id="viewerTzInfo"></div>
-        <p>This view shows how selected time blocks look in your time zone.</p>
+        <p>This shows the creator's availability converted to your local timezone.</p>
       </div>
     </div>
   </div>
@@ -187,11 +188,10 @@
     if (tzOffset) {
       creatorTimezoneOffset = parseInt(tzOffset);
       isViewer = true;
-      document.getElementById('myTimePanel').querySelector('h2').textContent = "Creator's Time";
-      document.getElementById('creatorTzInfo').textContent = `Timezone: UTC${formatTimezoneOffset(creatorTimezoneOffset)}`;
-    } else {
-      document.getElementById('creatorTzInfo').textContent = `My timezone: UTC${formatTimezoneOffset(creatorTimezoneOffset)}`;
+      document.getElementById('myTimePanel').querySelector('h2').textContent = "My Time";
     }
+    
+    document.getElementById('creatorTzInfo').textContent = `Timezone: UTC${formatTimezoneOffset(creatorTimezoneOffset)}`;
     
     if (format === "24") {
       document.getElementById("toggleFormat").checked = true;
@@ -227,7 +227,7 @@
 
   function computeViewerPeriods() {
     if (!isViewer) {
-      // If we're the creator, just copy our periods (no conversion needed)
+      // If we're the creator, show same times in both panels
       viewerPeriods = periods.map(p => ({...p}));
       return;
     }
@@ -368,8 +368,8 @@
   }
 
   function render() {
-    drawClock(document.getElementById('myCanvas'), periods, true);
-    drawClock(document.getElementById('clientCanvas'), viewerPeriods, true);
+    drawClock(document.getElementById('creatorCanvas'), periods, true);
+    drawClock(document.getElementById('viewerCanvas'), viewerPeriods, true);
 
     const timeListContainer = document.getElementById('timeList');
     timeListContainer.innerHTML = "";
