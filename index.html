@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none';">
   <title>Time Zone Availability Viewer</title>
   <style>
-    body {
+ body {
       margin: 0;
       padding: 0;
       font-family: sans-serif;
@@ -110,11 +109,6 @@
     input[type="checkbox"] {
       margin-right: 0.5rem;
     }
-    .timezone-info {
-      margin-top: 0.5rem;
-      font-size: 0.9rem;
-      color: #aaa;
-    }
   </style>
 </head>
 <body>
@@ -130,30 +124,28 @@
         <label>
           <input type="checkbox" id="toggleFormat" onchange="toggleTimeFormat()"> 24h Format
         </label>
-        <div class="timezone-info" id="creatorTzInfo"></div>
       </div>
     </div>
 
-    <!-- Center Panel with Creator's Time Diagram -->
+    <!-- Center Panel with My Time Diagram -->
     <div class="column-spacing">
       <div class="panel" id="myTimePanel">
         <h2>My Time</h2>
         <div class="diagram">
-          <canvas id="creatorCanvas" width="300" height="300"></canvas>
+          <canvas id="myCanvas" width="300" height="300"></canvas>
         </div>
         <div class="period-list" id="timeList"></div>
       </div>
     </div>
 
-    <!-- Right Panel with Viewer's Time Diagram -->
+    <!-- Right Panel with Client's Time Diagram -->
     <div class="column-spacing">
       <div class="panel">
         <h2>Your Time</h2>
         <div class="diagram">
-          <canvas id="viewerCanvas" width="300" height="300"></canvas>
+          <canvas id="clientCanvas" width="300" height="300"></canvas>
         </div>
-        <div class="timezone-info" id="viewerTzInfo"></div>
-        <p>This shows the creator's availability converted to your local timezone.</p>
+        <p>This view shows how selected time blocks look in your time zone. The conversion is automatic based on your browser settings.</p>
       </div>
     </div>
   </div>
@@ -167,13 +159,11 @@
   let use24h = false;
   const periods = [];
   let viewerPeriods = [];
-  let creatorTimezoneOffset = new Date().getTimezoneOffset(); // in minutes
-  let isViewer = false;
 
   function encodePeriodsToURL() {
     const encoded = periods.map(p => `${p.start}-${p.end}`).join(',');
     const base = location.origin + location.pathname;
-    const url = `${base}?periods=${encodeURIComponent(encoded)}&format=${use24h ? '24' : '12'}&tz=${creatorTimezoneOffset}`;
+    const url = `${base}?periods=${encodeURIComponent(encoded)}&format=${use24h ? '24' : '12'}`;
     navigator.clipboard.writeText(url).then(() => {
       alert("Link copied to clipboard!");
     });
@@ -183,21 +173,10 @@
     const params = new URLSearchParams(window.location.search);
     const encoded = params.get("periods");
     const format = params.get("format");
-    const tzOffset = params.get("tz");
-    
-    if (tzOffset) {
-      creatorTimezoneOffset = parseInt(tzOffset);
-      isViewer = true;
-      document.getElementById('myTimePanel').querySelector('h2').textContent = "My Time";
-    }
-    
-    document.getElementById('creatorTzInfo').textContent = `Timezone: UTC${formatTimezoneOffset(creatorTimezoneOffset)}`;
-    
     if (format === "24") {
       document.getElementById("toggleFormat").checked = true;
       use24h = true;
     }
-    
     if (encoded) {
       periods.length = 0;
       encoded.split(',').forEach(pair => {
@@ -212,32 +191,13 @@
       });
       computeViewerPeriods();
     }
-    
-    // Show viewer timezone info
-    const viewerOffset = new Date().getTimezoneOffset();
-    document.getElementById('viewerTzInfo').textContent = `Your timezone: UTC${formatTimezoneOffset(viewerOffset)}`;
-  }
-
-  function formatTimezoneOffset(offset) {
-    const hours = Math.abs(Math.floor(offset / 60));
-    const minutes = Math.abs(offset % 60);
-    const sign = offset <= 0 ? '+' : '-';
-    return `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   }
 
   function computeViewerPeriods() {
-    if (!isViewer) {
-      // If we're the creator, show same times in both panels
-      viewerPeriods = periods.map(p => ({...p}));
-      return;
-    }
-    
-    const viewerOffset = new Date().getTimezoneOffset();
-    const offsetDifference = creatorTimezoneOffset - viewerOffset;
-    
+    const offset = new Date().getTimezoneOffset(); // in minutes
     viewerPeriods = periods.map(p => ({
-      start: p.start + offsetDifference,
-      end: p.end + offsetDifference,
+      start: p.start - offset,
+      end: p.end - offset,
       color: p.color
     }));
   }
@@ -368,8 +328,8 @@
   }
 
   function render() {
-    drawClock(document.getElementById('creatorCanvas'), periods, true);
-    drawClock(document.getElementById('viewerCanvas'), viewerPeriods, true);
+    drawClock(document.getElementById('myCanvas'), periods, true);
+    drawClock(document.getElementById('clientCanvas'), viewerPeriods, true);
 
     const timeListContainer = document.getElementById('timeList');
     timeListContainer.innerHTML = "";
