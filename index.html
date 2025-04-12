@@ -109,6 +109,11 @@
     input[type="checkbox"] {
       margin-right: 0.5rem;
     }
+    .timezone-info {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      color: #aaa;
+    }
   </style>
 </head>
 <body>
@@ -124,6 +129,7 @@
         <label>
           <input type="checkbox" id="toggleFormat" onchange="toggleTimeFormat()"> 24h Format
         </label>
+        <div class="timezone-info" id="creatorTzInfo"></div>
       </div>
     </div>
 
@@ -145,205 +151,243 @@
         <div class="diagram">
           <canvas id="clientCanvas" width="300" height="300"></canvas>
         </div>
-        <p>This view shows how selected time blocks look in your time zone. The conversion is automatic based on your browser settings.</p>
+        <div class="timezone-info" id="viewerTzInfo"></div>
+        <p>This view shows how selected time blocks look in your time zone.</p>
       </div>
     </div>
   </div>
 
   <script>
-    const colors = [
-      '#ff6b6b', '#feca57', '#48dbfb', '#1dd1a1', '#ff9ff3',
-      '#5f27cd', '#54a0ff', '#00d2d3', '#ff9f43', '#8395a7'
-    ];
+  const colors = [
+    '#ff6b6b', '#feca57', '#48dbfb', '#1dd1a1', '#ff9ff3',
+    '#5f27cd', '#54a0ff', '#00d2d3', '#ff9f43', '#8395a7'
+  ];
 
-    let use24h = false;
-    const periods = [];
+  let use24h = false;
+  const periods = [];
+  let viewerPeriods = [];
+  let creatorTimezoneOffset = new Date().getTimezoneOffset(); // in minutes
+  let isViewer = false;
 
-    function encodePeriodsToURL() {
-      const encoded = periods.map(p => `${p.start}-${p.end}`).join(',');
-      const base = location.origin + location.pathname;
-      const url = `${base}?periods=${encodeURIComponent(encoded)}&format=${use24h ? '24' : '12'}`;
-      navigator.clipboard.writeText(url).then(() => {
-        alert("Link copied to clipboard!");
-      });
+  function encodePeriodsToURL() {
+    const encoded = periods.map(p => `${p.start}-${p.end}`).join(',');
+    const base = location.origin + location.pathname;
+    const url = `${base}?periods=${encodeURIComponent(encoded)}&format=${use24h ? '24' : '12'}&tz=${creatorTimezoneOffset}`;
+    navigator.clipboard.writeText(url).then(() => {
+      alert("Link copied to clipboard!");
+    });
+  }
+
+  function loadPeriodsFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get("periods");
+    const format = params.get("format");
+    const tzOffset = params.get("tz");
+    
+    if (tzOffset) {
+      creatorTimezoneOffset = parseInt(tzOffset);
+      isViewer = true;
+      document.getElementById('myTimePanel').querySelector('h2').textContent = "Creator's Time";
+      document.getElementById('creatorTzInfo').textContent = `Timezone: UTC${formatTimezoneOffset(creatorTimezoneOffset)}`;
+    } else {
+      document.getElementById('creatorTzInfo').textContent = `My timezone: UTC${formatTimezoneOffset(creatorTimezoneOffset)}`;
     }
-
-    function loadPeriodsFromURL() {
-      const params = new URLSearchParams(window.location.search);
-      const encoded = params.get("periods");
-      const format = params.get("format");
-      if (format === "24") {
-        document.getElementById("toggleFormat").checked = true;
-        use24h = true;
-      }
-      if (encoded) {
-        periods.length = 0;
-        encoded.split(',').forEach(pair => {
-          const [start, end] = pair.split('-').map(Number);
-          if (!isNaN(start) && !isNaN(end)) {
-            periods.push({
-              start,
-              end,
-              color: colors[periods.length % colors.length]
-            });
-          }
-        });
-        // Convert times to local time zone when loading the link
-        convertToLocalTime();
-      }
+    
+    if (format === "24") {
+      document.getElementById("toggleFormat").checked = true;
+      use24h = true;
     }
-
-    function convertToLocalTime() {
-      const offset = new Date().getTimezoneOffset(); // Get time zone offset in minutes
-      periods.forEach(p => {
-        p.start = p.start - offset;
-        p.end = p.end - offset;
-      });
-    }
-
-    function addTimeBlock() {
-      if (periods.length >= 10) return alert("Max 10 periods allowed.");
-      const start = document.getElementById('startTime').value;
-      const end = document.getElementById('endTime').value;
-      if (!start || !end) return;
-
-      const [sh, sm] = start.split(":").map(Number);
-      const [eh, em] = end.split(":").map(Number);
-      let startMin = sh * 60 + sm;
-      let endMin = eh * 60 + em;
-      startMin = Math.round(startMin / 5) * 5;
-      endMin = Math.round(endMin / 5) * 5;
-      if (startMin === endMin) return;
-
-      periods.push({
-        start: startMin,
-        end: endMin,
-        color: colors[periods.length % colors.length]
-      });
-
-      render();
-    }
-
-    function clearTimeBlocks() {
+    
+    if (encoded) {
       periods.length = 0;
-      render();
-    }
-
-    function deletePeriod(index) {
-      periods.splice(index, 1);
-      render();
-    }
-
-    function toggleTimeFormat() {
-      use24h = document.getElementById('toggleFormat').checked;
-      render();
-    }
-
-    function mergePeriods(periodList) {
-      if (periodList.length === 0) return [];
-      const sorted = [...periodList].sort((a, b) => a.start - b.start);
-      const merged = [Object.assign({}, sorted[0])];
-      for (let i = 1; i < sorted.length; i++) {
-        const last = merged[merged.length - 1];
-        if (sorted[i].start <= last.end) {
-          last.end = Math.max(last.end, sorted[i].end);
-        } else {
-          merged.push(Object.assign({}, sorted[i]));
+      encoded.split(',').forEach(pair => {
+        const [start, end] = pair.split('-').map(Number);
+        if (!isNaN(start) && !isNaN(end)) {
+          periods.push({
+            start,
+            end,
+            color: colors[periods.length % colors.length]
+          });
         }
+      });
+      computeViewerPeriods();
+    }
+    
+    // Show viewer timezone info
+    const viewerOffset = new Date().getTimezoneOffset();
+    document.getElementById('viewerTzInfo').textContent = `Your timezone: UTC${formatTimezoneOffset(viewerOffset)}`;
+  }
+
+  function formatTimezoneOffset(offset) {
+    const hours = Math.abs(Math.floor(offset / 60));
+    const minutes = Math.abs(offset % 60);
+    const sign = offset <= 0 ? '+' : '-';
+    return `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+
+  function computeViewerPeriods() {
+    if (!isViewer) {
+      // If we're the creator, just copy our periods (no conversion needed)
+      viewerPeriods = periods.map(p => ({...p}));
+      return;
+    }
+    
+    const viewerOffset = new Date().getTimezoneOffset();
+    const offsetDifference = creatorTimezoneOffset - viewerOffset;
+    
+    viewerPeriods = periods.map(p => ({
+      start: p.start + offsetDifference,
+      end: p.end + offsetDifference,
+      color: p.color
+    }));
+  }
+
+  function addTimeBlock() {
+    if (periods.length >= 10) return alert("Max 10 periods allowed.");
+    const start = document.getElementById('startTime').value;
+    const end = document.getElementById('endTime').value;
+    if (!start || !end) return;
+
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    let startMin = sh * 60 + sm;
+    let endMin = eh * 60 + em;
+    startMin = Math.round(startMin / 5) * 5;
+    endMin = Math.round(endMin / 5) * 5;
+    if (startMin === endMin) return;
+
+    periods.push({
+      start: startMin,
+      end: endMin,
+      color: colors[periods.length % colors.length]
+    });
+
+    computeViewerPeriods();
+    render();
+  }
+
+  function clearTimeBlocks() {
+    periods.length = 0;
+    viewerPeriods.length = 0;
+    render();
+  }
+
+  function deletePeriod(index) {
+    periods.splice(index, 1);
+    computeViewerPeriods();
+    render();
+  }
+
+  function toggleTimeFormat() {
+    use24h = document.getElementById('toggleFormat').checked;
+    render();
+  }
+
+  function mergePeriods(periodList) {
+    if (periodList.length === 0) return [];
+    const sorted = [...periodList].sort((a, b) => a.start - b.start);
+    const merged = [Object.assign({}, sorted[0])];
+    for (let i = 1; i < sorted.length; i++) {
+      const last = merged[merged.length - 1];
+      if (sorted[i].start <= last.end) {
+        last.end = Math.max(last.end, sorted[i].end);
+      } else {
+        merged.push(Object.assign({}, sorted[i]));
       }
-      return merged;
+    }
+    return merged;
+  }
+
+  function drawClock(canvas, periodList, labelTimes = false) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const radius = 120;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    for (let i = 0; i < 24; i++) {
+      const angle = (i / 24) * 2 * Math.PI - Math.PI / 2;
+      const x1 = cx + Math.cos(angle) * (radius - 5);
+      const y1 = cy + Math.sin(angle) * (radius - 5);
+      const x2 = cx + Math.cos(angle) * (radius);
+      const y2 = cy + Math.sin(angle) * (radius);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
 
-    function drawClock(canvas, periodList, labelTimes = false) {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const cx = canvas.width / 2;
-      const cy = canvas.height / 2;
-      const radius = 120;
+    const merged = mergePeriods(periodList);
+
+    merged.forEach((p, index) => {
+      const startAngle = (p.start / 1440) * 2 * Math.PI - Math.PI / 2;
+      const endAngle = (p.end / 1440) * 2 * Math.PI - Math.PI / 2;
 
       ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = '#444';
-      ctx.lineWidth = 2;
+      ctx.arc(cx, cy, radius, startAngle, endAngle);
+      ctx.strokeStyle = colors[index % colors.length];
+      ctx.lineWidth = 20;
       ctx.stroke();
 
-      for (let i = 0; i < 24; i++) {
-        const angle = (i / 24) * 2 * Math.PI - Math.PI / 2;
-        const x1 = cx + Math.cos(angle) * (radius - 5);
-        const y1 = cy + Math.sin(angle) * (radius - 5);
-        const x2 = cx + Math.cos(angle) * (radius);
-        const y2 = cy + Math.sin(angle) * (radius);
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.strokeStyle = '#666';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+      if (labelTimes) {
+        ctx.fillStyle = colors[index % colors.length];
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const startX = cx + Math.cos(startAngle) * (radius - 30);
+        const startY = cy + Math.sin(startAngle) * (radius - 30);
+        ctx.fillText(formatTime(p.start), startX, startY);
+
+        const endX = cx + Math.cos(endAngle) * (radius - 30);
+        const endY = cy + Math.sin(endAngle) * (radius - 30);
+        ctx.fillText(formatTime(p.end), endX, endY);
       }
+    });
+  }
 
-      const merged = mergePeriods(periodList);
-
-      merged.forEach((p, index) => {
-        const startAngle = (p.start / 1440) * 2 * Math.PI - Math.PI / 2;
-        const endAngle = (p.end / 1440) * 2 * Math.PI - Math.PI / 2;
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, startAngle, endAngle);
-        ctx.strokeStyle = colors[index % colors.length];
-        ctx.lineWidth = 20;
-        ctx.stroke();
-
-        if (labelTimes) {
-          ctx.fillStyle = colors[index % colors.length];
-          ctx.font = '12px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-
-          const startX = cx + Math.cos(startAngle) * (radius - 30);
-          const startY = cy + Math.sin(startAngle) * (radius - 30);
-          ctx.fillText(formatTime(p.start), startX, startY);
-
-          const endX = cx + Math.cos(endAngle) * (radius - 30);
-          const endY = cy + Math.sin(endAngle) * (radius - 30);
-          ctx.fillText(formatTime(p.end), endX, endY);
-        }
-      });
+  function formatTime(minutes) {
+    const totalMinutes = ((minutes % 1440) + 1440) % 1440; // Normalize
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (use24h) {
+      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    } else {
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const hour = hours % 12 || 12;
+      return `${hour}:${String(mins).padStart(2, '0')} ${period}`;
     }
+  }
 
-    function formatTime(minutes) {
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      if (use24h) {
-        return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-      } else {
-        const period = hours >= 12 ? 'PM' : 'AM';
-        const hour = hours % 12 || 12;
-        return `${hour}:${String(mins).padStart(2, '0')} ${period}`;
-      }
-    }
+  function render() {
+    drawClock(document.getElementById('myCanvas'), periods, true);
+    drawClock(document.getElementById('clientCanvas'), viewerPeriods, true);
 
-    function render() {
-      drawClock(document.getElementById('myCanvas'), periods, true); // Show labels on My Time diagram
-      drawClock(document.getElementById('clientCanvas'), periods, true); // Show labels on Client's Time diagram
+    const timeListContainer = document.getElementById('timeList');
+    timeListContainer.innerHTML = "";
+    periods.forEach((p, index) => {
+      const div = document.createElement('div');
+      div.classList.add('period-item');
+      div.innerHTML = `
+        <span>${formatTime(p.start)} - ${formatTime(p.end)}</span>
+        <button onclick="deletePeriod(${index})">x</button>
+      `;
+      timeListContainer.appendChild(div);
+    });
+  }
 
-      // Generate time intervals list below first diagram
-      const timeListContainer = document.getElementById('timeList');
-      timeListContainer.innerHTML = "";
-      periods.forEach((p, index) => {
-        const div = document.createElement('div');
-        div.classList.add('period-item');
-        div.innerHTML = `
-          <span>${formatTime(p.start)} - ${formatTime(p.end)}</span>
-          <button onclick="deletePeriod(${index})">x</button>
-        `;
-        timeListContainer.appendChild(div);
-      });
-    }
-
-    window.onload = () => {
-      loadPeriodsFromURL();
-      render();
-    };
-  </script>
+  window.onload = () => {
+    loadPeriodsFromURL();
+    render();
+  };
+</script>
 </body>
 </html>
