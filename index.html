@@ -194,12 +194,14 @@
   }
 
   function computeViewerPeriods() {
-    const offset = new Date().getTimezoneOffset(); // in minutes
+    const originalOffset = -120; // Belgrade in DST (UTC+2), adjust if not DST
+    const currentOffset = new Date().getTimezoneOffset(); // in minutes
+    const offsetDiff = currentOffset - originalOffset;
     viewerPeriods = periods.map(p => ({
-      start: p.start - offset,
-      end: p.end - offset,
-      color: p.color
-    }));
+  start: p.start - offsetDiff,
+  end: p.end - offsetDiff,
+  color: p.color
+}));
   }
 
   function addTimeBlock() {
